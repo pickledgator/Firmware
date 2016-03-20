@@ -148,6 +148,7 @@ MavlinkMissionManager::update_active_mission(int dataman_id, unsigned count, int
 	mission.dataman_id = dataman_id;
 	mission.count = count;
 	mission.current_seq = seq;
+	mission.reset_mission = false;
 
 	/* update mission state in dataman */
 	int res = dm_write(DM_KEY_MISSION_STATE, 0, DM_PERSIST_POWER_ON_RESET, &mission, sizeof(mission_s));

@@ -203,6 +203,11 @@ private:
 	 */
 	bool check_mission_valid();
 
+	/**
+	 * Reset offboard mission
+	 */
+	void reset_offboard_mission(struct mission_s &mission);
+
 	control::BlockParamInt _param_onboard_enabled;
 	control::BlockParamFloat _param_takeoff_alt;
 	control::BlockParamFloat _param_dist_1wp;

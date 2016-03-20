@@ -237,6 +237,10 @@ Mission::update_offboard_mission()
 	bool failed = true;
 
 	if (orb_copy(ORB_ID(offboard_mission), _navigator->get_offboard_mission_sub(), &_offboard_mission) == OK) {
+		if (_offboard_mission.reset_mission) {
+			reset_offboard_mission(_offboard_mission);
+		}
+
 		warnx("offboard mission updated: dataman_id=%d, count=%d, current_seq=%d", _offboard_mission.dataman_id, _offboard_mission.count, _offboard_mission.current_seq);
 		/* determine current index */
 		if (_offboard_mission.current_seq >= 0 && _offboard_mission.current_seq < (int)_offboard_mission.count) {
@@ -1041,4 +1045,56 @@ Mission::check_mission_valid()
 	}
 
 	return _navigator->get_mission_result()->valid;
+}
+
+void
+Mission::reset_offboard_mission(struct mission_s &mission)
+{
+	dm_lock(DM_KEY_MISSION_STATE);
+
+	if (dm_read(DM_KEY_MISSION_STATE, 0, &mission, sizeof(mission_s)) == sizeof(mission_s)) {
+		if (mission.dataman_id >= 0 && mission.dataman_id <= 1) {
+			/* set current item to 0 */
+			mission.current_seq = 0;
+
+			/* reset jump counters */
+			if (mission.count > 0) {
+				dm_item_t dm_current = DM_KEY_WAYPOINTS_OFFBOARD(mission.dataman_id);
+
+				for (int index = 0; index < mission.count; index++) {
+					struct mission_item_s item;
+					const ssize_t len = sizeof(struct mission_item_s);
+
+					if (dm_read(dm_current, index, &item, len) != len) {
+						PX4_WARN("could not read mission item during reset");
+						break;
+					}
+
+					if (item.nav_cmd == NAV_CMD_DO_JUMP) {
+						item.do_jump_current_count = 0;
+
+						if (dm_write(dm_current, index, DM_PERSIST_POWER_ON_RESET,
+							     &item, len) != len) {
+							PX4_WARN("could not save mission item during reset");
+							break;
+						}
+					}
+				}
+			}
+
+		} else {
+			mavlink_and_console_log_critical(_navigator->get_mavlink_fd(), "ERROR: could not read mission");
+
+			/* initialize mission state in dataman */
+			mission.dataman_id = 0;
+			mission.count = 0;
+			mission.current_seq = 0;
+		}
+
+		dm_write(DM_KEY_MISSION_STATE, 0, DM_PERSIST_POWER_ON_RESET, &mission, sizeof(mission_s));
+
+		mavlink_and_console_log_info(_navigator->get_mavlink_fd(), "mission reset");
+	}
+
+	dm_unlock(DM_KEY_MISSION_STATE);
 }

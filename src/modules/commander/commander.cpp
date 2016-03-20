@@ -1332,6 +1332,8 @@ int commander_thread_main(int argc, char *argv[])
 
 	bool updated = false;
 
+	bool need_mission_reset = false;
+
 	/* Subscribe to safety topic */
 	int safety_sub = orb_subscribe(ORB_ID(safety));
 	memset(&safety, 0, sizeof(safety));
@@ -2531,6 +2533,21 @@ int commander_thread_main(int argc, char *argv[])
 
 				main_state_transition(&status, status.main_state_prev);
 			}
+		}
+
+		/* reset mission state when disarmed */
+		if (!armed.armed && need_mission_reset) {
+			struct mission_s mission_tmp = {};
+			mission_tmp.reset_mission = true;
+
+			if (mission_pub != nullptr) {
+				orb_publish(ORB_ID(offboard_mission), mission_pub, &mission_tmp);
+			}
+			need_mission_reset = false;
+
+		} else if (armed.armed && status.main_state == vehicle_status_s::MAIN_STATE_AUTO_MISSION) {
+			/* mission is running, need reset after disarm */
+			need_mission_reset = true;
 		}
 
 		/* handle commands last, as the system needs to be updated to handle them */
