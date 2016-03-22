@@ -419,7 +419,7 @@ Mission::set_mission_items()
 
 	/* handle position mission items */
 
-	printf("NAV_CMD %.2f \n", (double)_mission_item.nav_cmd);
+	printf("NAV_CMD %.2f workitem: %2f \n", (double)_mission_item.nav_cmd, (double)_work_item_type);
 
 	if (item_contains_position(&_mission_item)) {
 
@@ -477,23 +477,13 @@ Mission::set_mission_items()
 		}
 
 			if (_mission_item.nav_cmd == NAV_CMD_VTOL_LAND
-					&& _work_item_type != WORK_ITEM_TYPE_MOVE_TO_LAND
+					&& _work_item_type == WORK_ITEM_TYPE_DEFAULT
 					&& !_navigator->get_vstatus()->condition_landed) {
-				printf("vtol move to land \n");
-
+				printf("vt move to land \n");
 				new_work_item_type = WORK_ITEM_TYPE_MOVE_TO_LAND;
-
 				/* use current mission item as next position item */
 				memcpy(&mission_item_next_position, &_mission_item, sizeof(struct mission_item_s));
 				has_next_position_item = true;
-
-				/*
-				 * Ignoring waypoint altitude:
-				 * Set altitude to the same as we have now to prevent descending too fast into
-				 * the ground. Actual landing will descend anyway until it touches down.
-				 * XXX: We might want to change that at some point if it is clear to the user
-				 * what the altitude means on this waypoint type.
-				 */
 				float altitude = _navigator->get_global_position()->alt;
 				if (pos_sp_triplet->current.valid) {
 					altitude = pos_sp_triplet->current.alt;
@@ -510,15 +500,17 @@ Mission::set_mission_items()
 					&& _work_item_type == WORK_ITEM_TYPE_MOVE_TO_LAND
 					&& !_navigator->get_vstatus()->is_rotary_wing
 					&& !_navigator->get_vstatus()->condition_landed) {
-
+				printf("vt transition \n");
 				_mission_item.nav_cmd = NAV_CMD_DO_VTOL_TRANSITION;
 				_mission_item.params[0] = vehicle_status_s::VEHICLE_VTOL_STATE_MC;
-				new_work_item_type = WORK_ITEM_TYPE_TRANSITON_BEFORE_LAND;
+				_mission_item.autocontinue = true;
+				new_work_item_type = WORK_ITEM_TYPE_MOVE_TO_LAND_AFTER_TRANSITION;
 			}
 
 		/* move to landing waypoint before descent if necessary */
-		if (do_need_move_to_land() && _work_item_type != WORK_ITEM_TYPE_MOVE_TO_LAND) {
+		if (do_need_move_to_land() && (_work_item_type == WORK_ITEM_TYPE_DEFAULT || _work_item_type == WORK_ITEM_TYPE_MOVE_TO_LAND_AFTER_TRANSITION)) {
 			new_work_item_type = WORK_ITEM_TYPE_MOVE_TO_LAND;
+			printf("doneedmovetoland \n");
 
 			/* use current mission item as next position item */
 			memcpy(&mission_item_next_position, &_mission_item, sizeof(struct mission_item_s));
@@ -691,7 +683,7 @@ Mission::do_need_takeoff()
 bool
 Mission::do_need_move_to_land()
 {
-	if (_navigator->get_vstatus()->is_rotary_wing && _mission_item.nav_cmd == NAV_CMD_LAND) {
+	if (_navigator->get_vstatus()->is_rotary_wing && (_mission_item.nav_cmd == NAV_CMD_LAND || _mission_item.nav_cmd == NAV_CMD_VTOL_LAND)) {
 
 		float d_current = get_distance_to_next_waypoint(_mission_item.lat, _mission_item.lon,
 			_navigator->get_global_position()->lat, _navigator->get_global_position()->lon);
