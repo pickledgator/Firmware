@@ -115,10 +115,7 @@ MissionBlock::is_mission_item_reached()
 			if (hrt_absolute_time() - _action_start > 500000 &&
 					!_navigator->get_vstatus()->in_transition_mode) {
 				_action_start = 0;
-
-				printf("transition reached \n");
 				return true;
-
 			} else {
 				return false;
 			}
